@@ -88,23 +88,48 @@ fn color_from_ray(ray: &Ray) -> Vec3 {
         )
 }
 
-fn main() {
-    let nx = 200;
-    let ny = 100;
+struct PPM {
+    width: i64,
+    height: i64
+}
 
-    io::stdout().write(
-        format!("P3\n{} {}\n255\n", nx, ny).as_bytes()
-    ).unwrap();
+impl PPM {
+    pub fn new(width: i64, height: i64) -> PPM {
+        PPM {
+            width: width,
+            height: height
+        }
+    }
+
+    fn write_header(&self) -> Result<(), io::Error> {
+        io::stdout().write(
+            format!("P3\n{} {}\n255\n", self.width, self.height).as_bytes()
+        ).map(|_| ())
+    }
+
+    fn write_pixel(&self, color: &Vec3) -> Result<(), io::Error> {
+        io::stdout().write(
+            format!("{} {} {}\n", color.r() as i64, color.g() as i64, color.b() as i64).as_bytes()
+        ).map(|_| ())
+    }
+}
+
+fn main() {
+    let width = 200;
+    let height = 100;
+
+    let image = PPM::new(width, height);
+    image.write_header().unwrap();
 
     let lower_left_corner = Vec3::new(-2.0, -1.0, -1.0);
     let horizontal = Vec3::new(4.0, 0.0, 0.0);
     let vertical = Vec3::new(0.0, 2.0, 0.0);
     let origin = Vec3::new(0.0, 0.0, 0.0);
 
-    for j in (0..ny).rev() {
-        for i in 0..nx {
-            let u: f64 = i as f64 / nx as f64;
-            let v: f64 = j as f64 / ny as f64;
+    for j in (0..height).rev() {
+        for i in 0..width {
+            let u: f64 = i as f64 / width as f64;
+            let v: f64 = j as f64 / height as f64;
 
             let u_vec3 = &horizontal.mul_t(u);
             let v_vec3 = &vertical.mul_t(v);
@@ -117,15 +142,8 @@ fn main() {
                 &direction
             );
 
-            let color = color_from_ray(&ray);
-
-            let ir = 255.99 * color.r();
-            let ig = 255.99 * color.g();
-            let ib = 255.99 * color.b();
-
-            io::stdout().write(
-                format!("{} {} {}\n", ir as i64, ig as i64, ib as i64).as_bytes()
-            ).unwrap();
+            let color = color_from_ray(&ray).mul_t(255.99);
+            image.write_pixel(&color).unwrap();
         }
     }
 }
