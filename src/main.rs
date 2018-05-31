@@ -24,14 +24,14 @@ impl Vec3 {
     fn b(&self) -> f64 { self.p3 }
 
     fn length(&self) -> f64 {
-        (self.p1 * self.p1 + self.p2 * self.p2 + self.p3 * self.p3).sqrt()
+        self.dot(self).sqrt()
     }
 
     fn add_vec3(&self, v2: &Vec3) -> Vec3 {
         Vec3 {
             p1: self.p1 + v2.p1,
             p2: self.p2 + v2.p2,
-            p3: self.p3 + v2.p3
+            p3: self.p3 + v2.p3,
         }
     }
 
@@ -39,7 +39,7 @@ impl Vec3 {
         Vec3 {
             p1: self.p1 - v2.p1,
             p2: self.p2 - v2.p2,
-            p3: self.p3 - v2.p3
+            p3: self.p3 - v2.p3,
         }
     }
 
@@ -47,7 +47,7 @@ impl Vec3 {
         Vec3 {
             p1: self.p1 * t,
             p2: self.p2 * t,
-            p3: self.p3 * t
+            p3: self.p3 * t,
         }
     }
 
@@ -55,7 +55,7 @@ impl Vec3 {
         Vec3 {
             p1: self.p1 / t,
             p2: self.p2 / t,
-            p3: self.p3 / t
+            p3: self.p3 / t,
         }
     }
 
@@ -64,7 +64,7 @@ impl Vec3 {
     }
 
     fn dot(&self, v2: &Vec3) -> f64 {
-        self.p1 * v2.p1 + self.p2 * v2.p2 + self.p3 + v2.p3
+        self.p1 * v2.p1 + self.p2 * v2.p2 + self.p3 * v2.p3
     }
 
     fn cross(&self, v2: &Vec3) -> Vec3 {
@@ -98,19 +98,18 @@ impl<'a> Ray<'a> {
 
 fn hit_sphere(center: &Vec3, radius: f64, ray: &Ray) -> bool {
     let oc = ray.origin.sub_vec3(&center);
-    let a = ray.direction.dot(&ray.direction);
-    let b = 2.0 * oc.dot(&ray.direction);
-    let c = oc.dot(&oc) - radius * radius;
-    let discriminant = (b * b) - (4.0 * a * c);
+    let a: f64 = ray.direction.dot(&ray.direction);
+    let b: f64 = 2.0 * oc.dot(&ray.direction);
+    let c: f64 = oc.dot(&oc) - radius * radius;
+    let discriminant: f64 = b * b - 4.0 * a * c;
 
-    return discriminant > 0.0;
+    discriminant > 0.0
 }
 
 fn color_from_ray(ray: &Ray) -> Vec3 {
     let center = Vec3::new(0.0, 0.0, -1.0);
-    let radius = 0.5;
 
-    if hit_sphere(&center, radius, ray) {
+    if hit_sphere(&center, 0.5, ray) {
         return Vec3::new(1.0, 0.0, 0.0);
     }
 
@@ -161,6 +160,7 @@ fn main() {
     let lower_left_corner = Vec3::new(-2.0, -1.0, -1.0);
     let horizontal = Vec3::new(4.0, 0.0, 0.0);
     let vertical = Vec3::new(0.0, 2.0, 0.0);
+
     let origin = Vec3::new(0.0, 0.0, 0.0);
 
     for j in (0..height).rev() {
