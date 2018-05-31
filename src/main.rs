@@ -1,161 +1,145 @@
-use std::io::{self, Write};
+use std::f64;
 
-struct Vec3 {
-    p1: f64,
-    p2: f64,
-    p3: f64
+mod vec;
+mod ray;
+mod image;
+
+use vec::Vec3;
+use ray::Ray;
+use image::PPM;
+
+#[derive(Clone, Copy, Debug)]
+pub struct HitRecord {
+    pub t: f64,
+    pub point: Vec3,
+    pub normal: Vec3,
 }
 
-impl Vec3 {
-    pub fn new(p1: f64, p2: f64, p3: f64) -> Vec3 {
-        Vec3 {
-            p1: p1,
-            p2: p2,
-            p3: p3
-        }
-    }
+pub trait Model {
+    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord>;
+}
 
-    fn x(&self) -> f64 { self.p1 }
-    fn y(&self) -> f64 { self.p2 }
-    fn z(&self) -> f64 { self.p3 }
+#[derive(Clone, Copy, Debug)]
+pub struct Sphere {
+    pub center: Vec3,
+    pub radius: f64,
+}
 
-    fn r(&self) -> f64 { self.p1 }
-    fn g(&self) -> f64 { self.p2 }
-    fn b(&self) -> f64 { self.p3 }
-
-    fn length(&self) -> f64 {
-        self.dot(self).sqrt()
-    }
-
-    fn add_vec3(&self, v2: &Vec3) -> Vec3 {
-        Vec3 {
-            p1: self.p1 + v2.p1,
-            p2: self.p2 + v2.p2,
-            p3: self.p3 + v2.p3,
-        }
-    }
-
-    fn sub_vec3(&self, v2: &Vec3) -> Vec3 {
-        Vec3 {
-            p1: self.p1 - v2.p1,
-            p2: self.p2 - v2.p2,
-            p3: self.p3 - v2.p3,
-        }
-    }
-
-    fn mul_t(&self, t: f64) -> Vec3 {
-        Vec3 {
-            p1: self.p1 * t,
-            p2: self.p2 * t,
-            p3: self.p3 * t,
-        }
-    }
-
-    fn div_t(&self, t: f64) -> Vec3 {
-        Vec3 {
-            p1: self.p1 / t,
-            p2: self.p2 / t,
-            p3: self.p3 / t,
-        }
-    }
-
-    fn to_unit_vec3(&self) -> Vec3 {
-        self.div_t(self.length())
-    }
-
-    fn dot(&self, v2: &Vec3) -> f64 {
-        self.p1 * v2.p1 + self.p2 * v2.p2 + self.p3 * v2.p3
-    }
-
-    fn cross(&self, v2: &Vec3) -> Vec3 {
-        Vec3 {
-            p1: (self.p2 * v2.p3 - self.p3 * v2.p2),
-            p2: (self.p1 * v2.p3 - self.p3 * v2.p1),
-            p3: (self.p1 * v2.p2 - self.p2 * v2.p1)
+impl Sphere {
+    pub fn new(center: Vec3, radius: f64) -> Sphere {
+        Sphere {
+            center: center,
+            radius: radius,
         }
     }
 }
 
-struct Ray<'a> {
-    origin: &'a Vec3,
-    direction: &'a Vec3
-}
+impl Model for Sphere {
+    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
+        let oc = ray.origin.sub_vec3(&self.center);
+        let a: f64 = ray.direction.dot(&ray.direction);
+        let b: f64 = 2.0 * oc.dot(&ray.direction);
+        let c: f64 = oc.dot(&oc) - self.radius * self.radius;
+        let discriminant: f64 = b * b - 4.0 * a * c;
 
-impl<'a> Ray<'a> {
-    pub fn new(origin: &'a Vec3, direction: &'a Vec3) -> Ray<'a> {
-        Ray {
-            origin: origin,
-            direction: direction
+        if discriminant > 0.0 {
+            let temp = (-b - (b*b - a *c).sqrt()) / a;
+
+            if temp < t_max && temp > t_min {
+                let point = ray.point_at_parameter(temp);
+
+                return Some(
+                    HitRecord {
+                        t: temp,
+                        point: point.clone(),
+                        normal: point.sub_vec3(&self.center).div_t(self.radius)
+                    }
+                );
+            }
+
+            let temp = (-b + (b*b - a *c).sqrt()) / a;
+
+            if temp < t_max && temp > t_min {
+                let point = ray.point_at_parameter(temp);
+
+                return Some(
+                    HitRecord {
+                        t: temp,
+                        point: point,
+                        normal: point.sub_vec3(&self.center).div_t(self.radius)
+                    }
+                );
+            }
         }
-    }
 
-    fn point_at_parameter(&self, t: f64) -> Vec3 {
-        self.origin.add_vec3(
-            &self.direction.mul_t(t)
-        )
+        return None;
     }
 }
 
-fn hit_sphere(center: &Vec3, radius: f64, ray: &Ray) -> bool {
-    let oc = ray.origin.sub_vec3(&center);
-    let a: f64 = ray.direction.dot(&ray.direction);
-    let b: f64 = 2.0 * oc.dot(&ray.direction);
-    let c: f64 = oc.dot(&oc) - radius * radius;
-    let discriminant: f64 = b * b - 4.0 * a * c;
+impl Model for Vec<Box<Model>> {
+    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
+        let mut best_result = None;
+        let mut closest: f64 = t_max;
 
-    discriminant > 0.0
-}
-
-fn color_from_ray(ray: &Ray) -> Vec3 {
-    let center = Vec3::new(0.0, 0.0, -1.0);
-
-    if hit_sphere(&center, 0.5, ray) {
-        return Vec3::new(1.0, 0.0, 0.0);
-    }
-
-    let unit_direction = ray.direction.to_unit_vec3();
-    let t: f64 = 0.5 * (unit_direction.y() + 1.0);
-
-    Vec3::new(1.0, 1.0, 1.0)
-        .mul_t(1.0 - t)
-        .add_vec3(
-            &Vec3::new(0.5, 0.7, 1.0)
-            .mul_t(t)
-        )
-}
-
-struct PPM {
-    width: i64,
-    height: i64
-}
-
-impl PPM {
-    pub fn new(width: i64, height: i64) -> PPM {
-        PPM {
-            width: width,
-            height: height
+        for child in self {
+            if let Some(hit) = child.hit(ray, t_min, closest) {
+                match best_result {
+                    None => best_result = Some(hit),
+                    Some(prev) => if hit.t < prev.t {
+                        closest = hit.t;
+                        best_result = Some(hit)
+                    }
+                }
+            }
         }
-    }
 
-    fn write_header(&self) -> Result<(), io::Error> {
-        io::stdout().write(
-            format!("P3\n{} {}\n255\n", self.width, self.height).as_bytes()
-        ).map(|_| ())
+        best_result
     }
+}
 
-    fn write_pixel(&self, color: &Vec3) -> Result<(), io::Error> {
-        io::stdout().write(
-            format!("{} {} {}\n", color.r() as i64, color.g() as i64, color.b() as i64).as_bytes()
-        ).map(|_| ())
+fn color_from_ray(ray: &Ray, scene: &Box<Model>) -> Vec3 {
+    match scene.hit(ray, 0.0, f64::INFINITY) {
+        Some(hit) => {
+            return Vec3::new(
+                hit.normal.p1 + 1.0,
+                hit.normal.p2 + 1.0,
+                hit.normal.p3 + 1.0
+            ).mul_t(0.5);
+        },
+        None => {
+            let unit_direction = ray.direction.to_unit_vec3();
+            let t: f64 = 0.5 * (unit_direction.y() + 1.0);
+
+            return Vec3::new(1.0, 1.0, 1.0)
+                .mul_t(1.0 - t)
+                .add_vec3(
+                    &Vec3::new(0.5, 0.7, 1.0)
+                    .mul_t(t)
+                );
+        }
     }
 }
 
 fn main() {
-    let width = 200;
-    let height = 100;
+    let width = 400;
+    let height = 200;
 
     let image = PPM::new(width, height);
     image.write_header().unwrap();
+
+    let scene: Box<Model> =
+        Box::new(
+            vec![
+                Box::new(Sphere {
+                    center: Vec3::new(0.0, 0.0, -1.0),
+                    radius: 0.5,
+                }) as Box<Model>,
+                Box::new(Sphere {
+                    center: Vec3::new(0.0, -100.5, -1.0),
+                    radius: 100.0,
+                }) as Box<Model>,
+            ]
+        );
 
     let lower_left_corner = Vec3::new(-2.0, -1.0, -1.0);
     let horizontal = Vec3::new(4.0, 0.0, 0.0);
@@ -179,7 +163,8 @@ fn main() {
                 &direction
             );
 
-            let color = color_from_ray(&ray).mul_t(255.99);
+            let color = color_from_ray(&ray, &scene).mul_t(255.99);
+
             image.write_pixel(&color).unwrap();
         }
     }
