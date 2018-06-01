@@ -1,12 +1,12 @@
 use vec::Vec3;
 
-pub struct Ray<'a> {
-    pub origin: &'a Vec3,
-    pub direction: &'a Vec3,
+pub struct Ray {
+    pub origin: Vec3,
+    pub direction: Vec3,
 }
 
-impl<'a> Ray<'a> {
-    pub fn new(origin: &'a Vec3, direction: &'a Vec3) -> Ray<'a> {
+impl Ray {
+    pub fn new(origin: Vec3, direction: Vec3) -> Ray {
         Ray {
             origin: origin,
             direction: direction

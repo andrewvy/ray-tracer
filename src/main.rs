@@ -1,12 +1,16 @@
+extern crate rand;
+
 use std::f64;
 
-mod vec;
-mod ray;
+mod camera;
 mod image;
+mod ray;
+mod vec;
 
 use vec::Vec3;
 use ray::Ray;
 use image::PPM;
+use camera::Camera;
 
 #[derive(Clone, Copy, Debug)]
 pub struct HitRecord {
@@ -43,7 +47,7 @@ impl Model for Sphere {
         let discriminant: f64 = b * b - 4.0 * a * c;
 
         if discriminant > 0.0 {
-            let temp = (-b - (b*b - a *c).sqrt()) / a;
+            let temp = (-b - (b*b - a*c).sqrt()) / a;
 
             if temp < t_max && temp > t_min {
                 let point = ray.point_at_parameter(temp);
@@ -100,10 +104,12 @@ impl Model for Vec<Box<Model>> {
 fn color_from_ray(ray: &Ray, scene: &Box<Model>) -> Vec3 {
     match scene.hit(ray, 0.0, f64::INFINITY) {
         Some(hit) => {
+            let normalized = hit.normal.to_unit_vec3();
+
             return Vec3::new(
-                hit.normal.p1 + 1.0,
-                hit.normal.p2 + 1.0,
-                hit.normal.p3 + 1.0
+                normalized.p1 + 1.0,
+                normalized.p2 + 1.0,
+                normalized.p3 + 1.0
             ).mul_t(0.5);
         },
         None => {
@@ -123,8 +129,9 @@ fn color_from_ray(ray: &Ray, scene: &Box<Model>) -> Vec3 {
 fn main() {
     let width = 400;
     let height = 200;
+    let number_of_samples = 25;
 
-    let image = PPM::new(width, height);
+    let mut image = PPM::new(width, height);
     image.write_header().unwrap();
 
     let scene: Box<Model> =
@@ -141,31 +148,25 @@ fn main() {
             ]
         );
 
-    let lower_left_corner = Vec3::new(-2.0, -1.0, -1.0);
-    let horizontal = Vec3::new(4.0, 0.0, 0.0);
-    let vertical = Vec3::new(0.0, 2.0, 0.0);
-
-    let origin = Vec3::new(0.0, 0.0, 0.0);
+    let camera = Camera::new();
 
     for j in (0..height).rev() {
         for i in 0..width {
-            let u: f64 = i as f64 / width as f64;
-            let v: f64 = j as f64 / height as f64;
+            let mut sampled_color = Vec3::new(0.0, 0.0, 0.0);
 
-            let u_vec3 = &horizontal.mul_t(u);
-            let v_vec3 = &vertical.mul_t(v);
-            let direction = lower_left_corner
-                .add_vec3(&u_vec3)
-                .add_vec3(&v_vec3);
+            for _ in 0..number_of_samples {
+                let u: f64 = (i as f64 + rand::random::<f64>()) / width as f64;
+                let v: f64 = (j as f64 + rand::random::<f64>()) / height as f64;
+                let ray = camera.get_ray(u, v);
 
-            let ray = Ray::new(
-                &origin,
-                &direction
-            );
+                sampled_color = sampled_color.add_vec3(
+                    &color_from_ray(&ray, &scene).mul_t(255.99)
+                );
+            }
 
-            let color = color_from_ray(&ray, &scene).mul_t(255.99);
+            sampled_color = sampled_color.div_t(number_of_samples as f64);
 
-            image.write_pixel(&color).unwrap();
+            image.write_pixel(&sampled_color).unwrap();
         }
     }
 }
