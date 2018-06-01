@@ -159,6 +159,14 @@ fn main() {
                     radius: 0.5,
                 }) as Box<Model>,
                 Box::new(Sphere {
+                    center: Vec3::new(-1.0, 0.005, -1.0),
+                    radius: 0.5,
+                }) as Box<Model>,
+                Box::new(Sphere {
+                    center: Vec3::new(1.0, 0.005, -1.0),
+                    radius: 0.5,
+                }) as Box<Model>,
+                Box::new(Sphere {
                     center: Vec3::new(0.0, -100.5, -1.0),
                     radius: 100.0,
                 }) as Box<Model>,
