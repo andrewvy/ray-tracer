@@ -22,8 +22,12 @@ impl Vec3 {
     pub fn g(&self) -> f64 { self.p2 }
     pub fn b(&self) -> f64 { self.p3 }
 
+    pub fn squared_length(&self) -> f64 {
+        self.dot(self)
+    }
+
     pub fn length(&self) -> f64 {
-        self.dot(self).sqrt()
+        self.squared_length().sqrt()
     }
 
     pub fn add_vec3(&self, v2: &Vec3) -> Vec3 {

@@ -42,9 +42,9 @@ impl Model for Sphere {
     fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
         let oc = ray.origin.sub_vec3(&self.center);
         let a: f64 = ray.direction.dot(&ray.direction);
-        let b: f64 = 2.0 * oc.dot(&ray.direction);
+        let b: f64 = oc.dot(&ray.direction);
         let c: f64 = oc.dot(&oc) - self.radius * self.radius;
-        let discriminant: f64 = b * b - 4.0 * a * c;
+        let discriminant: f64 = b * b - a * c;
 
         if discriminant > 0.0 {
             let temp = (-b - (b*b - a*c).sqrt()) / a;
@@ -101,15 +101,32 @@ impl Model for Vec<Box<Model>> {
     }
 }
 
-fn color_from_ray(ray: &Ray, scene: &Box<Model>) -> Vec3 {
-    match scene.hit(ray, 0.0, f64::INFINITY) {
-        Some(hit) => {
-            let normalized = hit.normal.to_unit_vec3();
+fn random_in_unit_sphere() -> Vec3 {
+    let bounds = Vec3::new(1.0, 1.0, 1.0);
+    let mut point: Vec3;
 
-            return Vec3::new(
-                normalized.p1 + 1.0,
-                normalized.p2 + 1.0,
-                normalized.p3 + 1.0
+    while {
+        point = Vec3::new(
+            rand::random::<f64>(),
+            rand::random::<f64>(),
+            rand::random::<f64>()
+        ).mul_t(2.0).sub_vec3(&bounds);
+
+        point.squared_length() >= 1.0
+    } {}
+
+    return point;
+}
+
+fn color_from_ray(ray: &Ray, scene: &Box<Model>) -> Vec3 {
+    match scene.hit(ray, 0.001, f64::INFINITY) {
+        Some(hit) => {
+            let target = hit.point.add_vec3(&hit.normal).add_vec3(&random_in_unit_sphere());
+            let shadow_ray = Ray::new(hit.point, target.sub_vec3(&hit.point));
+
+            return color_from_ray(
+                &shadow_ray,
+                scene,
             ).mul_t(0.5);
         },
         None => {
@@ -129,7 +146,7 @@ fn color_from_ray(ray: &Ray, scene: &Box<Model>) -> Vec3 {
 fn main() {
     let width = 400;
     let height = 200;
-    let number_of_samples = 25;
+    let number_of_samples = 50;
 
     let mut image = PPM::new(width, height);
     image.write_header().unwrap();
@@ -138,7 +155,7 @@ fn main() {
         Box::new(
             vec![
                 Box::new(Sphere {
-                    center: Vec3::new(0.0, 0.0, -1.0),
+                    center: Vec3::new(0.0, 0.005, -1.0),
                     radius: 0.5,
                 }) as Box<Model>,
                 Box::new(Sphere {
@@ -160,11 +177,18 @@ fn main() {
                 let ray = camera.get_ray(u, v);
 
                 sampled_color = sampled_color.add_vec3(
-                    &color_from_ray(&ray, &scene).mul_t(255.99)
+                    &color_from_ray(&ray, &scene)
                 );
             }
 
-            sampled_color = sampled_color.div_t(number_of_samples as f64);
+            sampled_color = sampled_color
+                .div_t(number_of_samples as f64);
+
+            sampled_color = Vec3 {
+                p1: sampled_color.p1.sqrt(),
+                p2: sampled_color.p2.sqrt(),
+                p3: sampled_color.p3.sqrt(),
+            }.mul_t(255.99);
 
             image.write_pixel(&sampled_color).unwrap();
         }
