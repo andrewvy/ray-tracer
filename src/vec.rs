@@ -46,6 +46,14 @@ impl Vec3 {
         }
     }
 
+    pub fn mul_vec3(&self, v2: &Vec3) -> Vec3 {
+        Vec3 {
+            p1: self.p1 * v2.p1,
+            p2: self.p2 * v2.p2,
+            p3: self.p3 * v2.p3,
+        }
+    }
+
     pub fn mul_t(&self, t: f64) -> Vec3 {
         Vec3 {
             p1: self.p1 * t,

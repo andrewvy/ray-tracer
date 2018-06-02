@@ -6,128 +6,33 @@ mod camera;
 mod image;
 mod ray;
 mod vec;
+mod model;
+mod material;
 
 use vec::Vec3;
 use ray::Ray;
 use image::PPM;
 use camera::Camera;
+use model::{Model, Sphere};
 
-#[derive(Clone, Copy, Debug)]
-pub struct HitRecord {
-    pub t: f64,
-    pub point: Vec3,
-    pub normal: Vec3,
-}
-
-pub trait Model {
-    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord>;
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Sphere {
-    pub center: Vec3,
-    pub radius: f64,
-}
-
-impl Sphere {
-    pub fn new(center: Vec3, radius: f64) -> Sphere {
-        Sphere {
-            center: center,
-            radius: radius,
-        }
-    }
-}
-
-impl Model for Sphere {
-    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
-        let oc = ray.origin.sub_vec3(&self.center);
-        let a: f64 = ray.direction.dot(&ray.direction);
-        let b: f64 = oc.dot(&ray.direction);
-        let c: f64 = oc.dot(&oc) - self.radius * self.radius;
-        let discriminant: f64 = b * b - a * c;
-
-        if discriminant > 0.0 {
-            let temp = (-b - (b*b - a*c).sqrt()) / a;
-
-            if temp < t_max && temp > t_min {
-                let point = ray.point_at_parameter(temp);
-
-                return Some(
-                    HitRecord {
-                        t: temp,
-                        point: point.clone(),
-                        normal: point.sub_vec3(&self.center).div_t(self.radius)
-                    }
-                );
-            }
-
-            let temp = (-b + (b*b - a *c).sqrt()) / a;
-
-            if temp < t_max && temp > t_min {
-                let point = ray.point_at_parameter(temp);
-
-                return Some(
-                    HitRecord {
-                        t: temp,
-                        point: point,
-                        normal: point.sub_vec3(&self.center).div_t(self.radius)
-                    }
-                );
-            }
-        }
-
-        return None;
-    }
-}
-
-impl Model for Vec<Box<Model>> {
-    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
-        let mut best_result = None;
-        let mut closest: f64 = t_max;
-
-        for child in self {
-            if let Some(hit) = child.hit(ray, t_min, closest) {
-                match best_result {
-                    None => best_result = Some(hit),
-                    Some(prev) => if hit.t < prev.t {
-                        closest = hit.t;
-                        best_result = Some(hit)
-                    }
-                }
-            }
-        }
-
-        best_result
-    }
-}
-
-fn random_in_unit_sphere() -> Vec3 {
-    let bounds = Vec3::new(1.0, 1.0, 1.0);
-    let mut point: Vec3;
-
-    while {
-        point = Vec3::new(
-            rand::random::<f64>(),
-            rand::random::<f64>(),
-            rand::random::<f64>()
-        ).mul_t(2.0).sub_vec3(&bounds);
-
-        point.squared_length() >= 1.0
-    } {}
-
-    return point;
-}
-
-fn color_from_ray(ray: &Ray, scene: &Box<Model>) -> Vec3 {
+fn color_from_ray(ray: &Ray, scene: &Box<Model>, depth: i64) -> Vec3 {
     match scene.hit(ray, 0.001, f64::INFINITY) {
         Some(hit) => {
-            let target = hit.point.add_vec3(&hit.normal).add_vec3(&random_in_unit_sphere());
-            let shadow_ray = Ray::new(hit.point, target.sub_vec3(&hit.point));
+            if depth < 50 {
+                let scatter_record = hit.material.scatter(&ray, &hit);
 
-            return color_from_ray(
-                &shadow_ray,
-                scene,
-            ).mul_t(0.5);
+                if let Some(scatter_ray) = scatter_record.ray {
+                    return color_from_ray(
+                        &scatter_ray,
+                        scene,
+                        depth + 1
+                    ).mul_vec3(&scatter_record.color);
+                } else {
+                    return Vec3::new(0.0, 0.0, 0.0);
+                }
+            } else {
+                return Vec3::new(0.0, 0.0, 0.0);
+            }
         },
         None => {
             let unit_direction = ray.direction.to_unit_vec3();
@@ -154,22 +59,18 @@ fn main() {
     let scene: Box<Model> =
         Box::new(
             vec![
-                Box::new(Sphere {
-                    center: Vec3::new(0.0, 0.005, -1.0),
-                    radius: 0.5,
-                }) as Box<Model>,
-                Box::new(Sphere {
-                    center: Vec3::new(-1.0, 0.005, -1.0),
-                    radius: 0.5,
-                }) as Box<Model>,
-                Box::new(Sphere {
-                    center: Vec3::new(1.0, 0.005, -1.0),
-                    radius: 0.5,
-                }) as Box<Model>,
-                Box::new(Sphere {
-                    center: Vec3::new(0.0, -100.5, -1.0),
-                    radius: 100.0,
-                }) as Box<Model>,
+                Box::new(
+                    Sphere::new(
+                        Vec3::new(0.0, 0.005, -1.0),
+                        0.5
+                    )
+                ) as Box<Model>,
+                Box::new(
+                    Sphere::new(
+                        Vec3::new(0.0, -100.5, -1.0),
+                        100.0
+                    )
+                ) as Box<Model>,
             ]
         );
 
@@ -185,7 +86,7 @@ fn main() {
                 let ray = camera.get_ray(u, v);
 
                 sampled_color = sampled_color.add_vec3(
-                    &color_from_ray(&ray, &scene)
+                    &color_from_ray(&ray, &scene, 0)
                 );
             }
 
