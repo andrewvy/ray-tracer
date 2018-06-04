@@ -3,3 +3,5 @@
 **/*.rs.bk
 *.ppm
 *.png
+
+output/

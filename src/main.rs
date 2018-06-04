@@ -54,66 +54,81 @@ fn color_from_ray(mut ray: Ray, scene: &Box<Model>) -> Vec3 {
 fn main() {
     let width = 400;
     let height = 200;
-    let number_of_samples = 50;
-
-    let mut image = ImageBuffer::new(width, height);
-
-    let scene: Box<Model> =
-        Box::new(
-            vec![
-                Box::new(
-                    Sphere {
-                        center: Vec3::new(0.0, 0.005, -1.0),
-                        radius: 0.5,
-                        material: Box::new(Lambertian {
-                            albedo: Vec3::new(0.8, 0.3, 0.3)
-                        }),
-                    }
-                ) as Box<Model>,
-                Box::new(
-                    Sphere {
-                        center: Vec3::new(0.0, -100.5, -1.0),
-                        radius: 100.0,
-                        material: Box::new(Lambertian {
-                            albedo: Vec3::new(0.52, 0.58, 0.68)
-                        }),
-                    }
-                ) as Box<Model>,
-            ]
-        );
+    let number_of_samples = 30;
 
     let camera = Camera::new();
+    let number_of_frames = 60;
 
-    for y in (0..height).rev() {
-        let j = height - y;
+    let mut sphere_position = Vec3::new(0.0, 0.005, -1.5);
 
-        for x in 0..width {
-            let mut sampled_color = Vec3::new(0.0, 0.0, 0.0);
+    for n_frame in 1..number_of_frames {
+        let mut image = ImageBuffer::new(width, height);
 
-            for _ in 0..number_of_samples {
-                let u: f64 = (x as f64 + rand::random::<f64>()) / width as f64;
-                let v: f64 = (j as f64 + rand::random::<f64>()) / height as f64;
-                let ray = camera.get_ray(u, v);
+        println!("frame={} width={} height={} n_samples={}", n_frame, width, height, number_of_samples);
 
-                sampled_color = sampled_color.add_vec3(
-                    &color_from_ray(ray, &scene)
-                );
+        sphere_position = sphere_position.add_vec3(&Vec3::new(0.0, 0.0, 0.015));
+
+        let sphere = Box::new(Sphere {
+            center: sphere_position,
+            radius: 0.5,
+            material: Box::new(Lambertian {
+                albedo: Vec3::new(0.8, 0.3, 0.3)
+            })
+        });
+
+        let floor = Box::new(Sphere {
+            center: Vec3::new(0.0, -100.5, -1.0),
+            radius: 100.0,
+            material: Box::new(Lambertian {
+                albedo: Vec3::new(0.52, 0.58, 0.68)
+            })
+        });
+
+        let scene =
+            Box::new(
+                vec![
+                    sphere as Box<Model>,
+                    floor as Box<Model>,
+                ]
+            ) as Box<Model>;
+
+        for y in (0..height).rev() {
+            let j = height - y;
+
+            for x in 0..width {
+                let mut sampled_color = Vec3::new(0.0, 0.0, 0.0);
+
+                for _ in 0..number_of_samples {
+                    let u: f64 = (x as f64 + rand::random::<f64>()) / width as f64;
+                    let v: f64 = (j as f64 + rand::random::<f64>()) / height as f64;
+                    let ray = camera.get_ray(u, v);
+
+                    sampled_color = sampled_color.add_vec3(
+                        &color_from_ray(ray, &scene)
+                    );
+                }
+
+                sampled_color = sampled_color
+                    .div_t(number_of_samples as f64);
+
+                sampled_color = Vec3 {
+                    p1: sampled_color.p1.sqrt(),
+                    p2: sampled_color.p2.sqrt(),
+                    p3: sampled_color.p3.sqrt(),
+                }.mul_t(255.99);
+
+                let pixel = image::Rgb([
+                    sampled_color.p1 as u8,
+                    sampled_color.p2 as u8,
+                    sampled_color.p3 as u8
+                ]);
+
+                image.put_pixel(x, y, pixel);
             }
-
-            sampled_color = sampled_color
-                .div_t(number_of_samples as f64);
-
-            sampled_color = Vec3 {
-                p1: sampled_color.p1.sqrt(),
-                p2: sampled_color.p2.sqrt(),
-                p3: sampled_color.p3.sqrt(),
-            }.mul_t(255.99);
-
-            let pixel = image::Rgb([sampled_color.p1 as u8, sampled_color.p2 as u8, sampled_color.p3 as u8]);
-
-            image.put_pixel(x, y, pixel);
         }
-    }
 
-    image::ImageRgb8(image).save("image.png").unwrap();
+        image::ImageRgb8(image)
+            .save(format!("output/{}.png", n_frame))
+            .unwrap();
+    }
 }
